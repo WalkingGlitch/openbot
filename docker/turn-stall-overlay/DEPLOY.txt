@@ -1,0 +1,67 @@
+OpenBot 0.65.0 silence watchdog overlay
+Author: TheWalkingGlitch
+
+This build context is complete. Do not clone the repository on the VM.
+Do not build this image in the cloud. Build it on the Rakazo VM.
+Do not change the running app.asar. The Dockerfile builds a new image.
+Do not save an image archive. Rollback uses the original image reference.
+
+The setting is OPENBOT_ACP_TURN_STALL_MS.
+Absent or blank: five minutes (300000 ms).
+0: the model silence watchdog is off. The turn stays open.
+A positive whole number, such as 600000: that many milliseconds.
+Any other value: five minutes, and one warning in the log.
+Stop still ends the turn.
+This setting does not change RPC timeouts, startup timeouts, or the manual stop path.
+
+1. Copy this directory to the VM. Example path: /home/admin/openbot-vps/turn-stall-overlay
+
+2. Build on the VM:
+
+   cd /home/admin/openbot-vps/turn-stall-overlay
+   docker build --tag openbot:0.65.0-stall-off .
+
+   The build stops if the bundle is not the pinned 0.65.0 file.
+   The build stops if the patch does not match one time.
+
+3. Startup check. Do not mount the volume openbot_openbot-data.
+
+   docker run --rm --user root --entrypoint /bin/grep openbot:0.65.0-stall-off -a -o openbot-fork-acp-turn-stall-v1 /opt/OpenBot/app/resources/app.asar
+
+   The command prints the marker one time.
+
+   docker image inspect --format '{{.Config.User}} {{json .Config.Entrypoint}}' openbot:0.65.0-stall-off
+
+   The user is openbot. The entrypoint still starts with /usr/bin/tini.
+
+   timeout 40 docker run --rm --name openbot-stall-check \
+     -e OPENBOT_ACP_TURN_STALL_MS=0 \
+     --tmpfs /data:uid=1000,gid=1000,mode=0700 \
+     --shm-size 1g \
+     --security-opt seccomp=/home/admin/openbot-vps/seccomp.json \
+     --security-opt no-new-privileges:true \
+     openbot:0.65.0-stall-off
+
+   Stop the check container if it is still up. Do not use the real data volume.
+
+4. Deploy. Edit only the image and add the setting in /home/admin/openbot-vps/compose.yaml.
+   Keep every other line.
+
+   image: openbot:0.65.0-stall-off
+
+   Add this under the openbot service environment. Keep the keys that are already there.
+
+   OPENBOT_ACP_TURN_STALL_MS: "0"
+
+   cd /home/admin/openbot-vps
+   docker compose up -d --no-deps --force-recreate openbot
+
+5. Rollback. Put the original image line back. Remove OPENBOT_ACP_TURN_STALL_MS.
+   Then recreate the container. Do not load an image archive.
+
+   image: ghcr.io/nightly-labs/openbot:0.65.0@sha256:805aa13d29ca2fe299e5fcd7f815d5f851bc5ea1efa7a6e9cb4e4b6db2029c21
+
+   docker compose up -d --no-deps --force-recreate openbot
+   docker image rm openbot:0.65.0-stall-off
+
+The original image digest is the rollback target. Do not delete that image before the new container is healthy.
