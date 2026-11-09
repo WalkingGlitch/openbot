@@ -138,8 +138,51 @@ const ACP_PROMPT_AUDIO_BASE64_BYTES = 19 * 1024 * 1024;
 /**
  * How long a turn may send nothing, with no tool call open and no question to the user, before
  * OpenBot ends it. An OpenCode prompt can stay open for an hour with no update (#2858).
+ * `OPENBOT_ACP_TURN_STALL_MS` replaces this when `turnStallMs` is absent. 0 turns the watchdog off.
  */
 const ACP_TURN_STALL_MS = 5 * 60_000;
+const ACP_TURN_STALL_ENV = "OPENBOT_ACP_TURN_STALL_MS";
+let acpTurnStallWarned = false;
+
+/**
+ * The silence limit in milliseconds, or null when the watchdog is off.
+ * An absent value is five minutes. 0 is off. A positive whole number is that many milliseconds.
+ * Any other value keeps five minutes and writes one warning.
+ */
+function resolveAcpModelSilenceMs(configured: number | undefined): number | null {
+  if (typeof configured === "number") return normalizeAcpTurnStallNumber(configured, "turnStallMs");
+  return normalizeAcpTurnStallText(process.env[ACP_TURN_STALL_ENV]);
+}
+
+function normalizeAcpTurnStallNumber(value: number, source: string): number | null {
+  if (value === 0) return null;
+  if (Number.isSafeInteger(value) && value > 0) return value;
+  warnAcpTurnStall(source, String(value));
+  return ACP_TURN_STALL_MS;
+}
+
+function normalizeAcpTurnStallText(raw: string | undefined): number | null {
+  if (raw === undefined || raw.trim() === "") return ACP_TURN_STALL_MS;
+  const text = raw.trim();
+  if (!/^(?:0|[1-9]\d*)$/.test(text)) {
+    warnAcpTurnStall(ACP_TURN_STALL_ENV, text);
+    return ACP_TURN_STALL_MS;
+  }
+  const value = Number(text);
+  if (!Number.isSafeInteger(value)) {
+    warnAcpTurnStall(ACP_TURN_STALL_ENV, text);
+    return ACP_TURN_STALL_MS;
+  }
+  return value === 0 ? null : value;
+}
+
+function warnAcpTurnStall(source: string, text: string): void {
+  if (acpTurnStallWarned) return;
+  acpTurnStallWarned = true;
+  logger.warn(`${source} is not a whole number of milliseconds. OpenBot keeps ${ACP_TURN_STALL_MS} ms.`, {
+    value: text.slice(0, 64),
+  });
+}
 
 /**
  * How long an agent that keeps a silent prompt open for background tasks
@@ -447,7 +490,11 @@ export interface AcpProviderOptions {
    * so a configuration can never displace the tools the agent depends on.
    */
   mcpServers?: McpServerSource | undefined;
-  /** How long a turn may send nothing before it fails (`ACP_TURN_STALL_MS` when absent). */
+  /**
+   * How long a turn may send nothing before it fails.
+   * Absent: `OPENBOT_ACP_TURN_STALL_MS`, or five minutes when that is also absent.
+   * 0 turns the silence watchdog off. Stop still ends the turn.
+   */
   turnStallMs?: number;
   /** How long a prompt may get no update before it is sent again (`ACP_FIRST_UPDATE_MS` when absent). */
   firstUpdateMs?: number;
@@ -2780,7 +2827,10 @@ export class AcpAgentClient extends EventEmitter<ClientEvents> {
     thread: AcpThread,
     turn: AcpTurn,
   ) {
-    const limit = this.options.turnStallMs ?? ACP_TURN_STALL_MS;
+    const silenceMs = resolveAcpModelSilenceMs(this.options.turnStallMs);
+    // Zero keeps this turn open. Stop still ends it. A background-task agent still uses the five-minute probe.
+    if (silenceMs === null && !this.#flavor.promptOpenForBackgroundTasks) return;
+    const limit = silenceMs ?? ACP_TURN_STALL_MS;
     let answeredAt = 0;
     // A stopped turn ends by its stop, as interrupted, and not as a stall.
     while (thread.activeTurn === turn && !turn.completing && !turn.stopped) {

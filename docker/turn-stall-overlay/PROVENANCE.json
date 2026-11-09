@@ -1,0 +1,13 @@
+{
+  "image": "ghcr.io/nightly-labs/openbot:0.65.0@sha256:805aa13d29ca2fe299e5fcd7f815d5f851bc5ea1efa7a6e9cb4e4b6db2029c21",
+  "appImage": "OpenBot-0.65.0-x86_64.AppImage",
+  "appImageSha256": "02e2a3c83f7b2a2ed98a4bf6bbd87dfd60cd926296cff6350c34a395b3e3ddf7",
+  "bundle": "out/main/index.js",
+  "bundleSha256": "88efa4686246a2e46f8c7307968c9fe85cf4b22a29a1126336eac05b7ee01684",
+  "version": "0.65.0",
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "marker": "openbot-fork-acp-turn-stall-v1",
+  "setting": "OPENBOT_ACP_TURN_STALL_MS",
+  "zero": "watchdog off",
+  "unset": "300000 ms"
+}
