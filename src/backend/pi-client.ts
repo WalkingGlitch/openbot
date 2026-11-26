@@ -10,7 +10,7 @@ import { sourceText } from "@openbot/i18n/source";
 import { createOpenBotLogger, type LogValue, redactSecrets, redactText } from "@openbot/logging";
 import { type CauseCode, classifyFailure, httpStatusCause, structuredCause } from "@openbot/telemetry";
 import { Cause, Effect, Exit, Option, Schema, Scope, Semaphore } from "effect";
-import { CONTEXT_COMPACTION_THRESHOLD } from "./agent/context-compaction";
+import { contextCompactionThreshold } from "./fork-runtime-limits";
 import { withoutTurnContext } from "./agent/developer-instructions";
 import { secretElicitationField } from "./agent/prompts";
 import { isContextTooSmallFailure, isPiCompactionNoOp } from "./agent/provider-diagnostics";
@@ -282,7 +282,7 @@ export class PiAgentClient extends EventEmitter<ClientEvents> implements AgentCl
       ),
       Effect.orElseSucceed(() => Option.none<number>()),
     );
-    const full = Option.exists(usedShare, (share) => share >= CONTEXT_COMPACTION_THRESHOLD);
+    const full = Option.exists(usedShare, (share) => share >= contextCompactionThreshold());
     if (full && tooSmall) return yield* providerFailure(new Error(this.#contextTooSmall(message)));
     if (!noOp || full || Option.isNone(usedShare)) return yield* failure;
     logger.info("Pi has nothing to compact, so the session is already compact.", { provider: this.provider });

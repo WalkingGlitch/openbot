@@ -1,0 +1,94 @@
+OpenBot 0.79.0 overlay
+Author: TheWalkingGlitch
+
+This build context is complete. Do not clone the repository on the VM.
+Do not build this image in the cloud. Build it on the Rakazo VM.
+Do not change a running app.asar. The Dockerfile builds a new image.
+Do not save an image archive.
+
+The image base is:
+ghcr.io/nightly-labs/openbot:0.79.0@sha256:136cd40211352af4ec41df4451a920aebc79c5bb3f94cb862f6a3aea4696e915
+
+Settings:
+OPENBOT_ACP_TURN_STALL_MS=0
+  The ACP silence watchdog is off. Stop still ends the turn.
+  A custom endpoint gets a 24 hour OpenCode request timeout.
+  The 30 minute background stall value stays.
+OPENBOT_CONTEXT_COMPACTION_THRESHOLD=0.9
+  OpenBot compacts or hands off at 90 percent of the context window.
+AGENT_STALL_TIMEOUT_MS is not read by OpenBot 0.79.0. Remove it from compose.yaml.
+
+1. Copy this directory to the VM. Example path: /home/admin/openbot-vps/openbot-0.79-overlay
+
+2. Build on the VM:
+
+   cd /home/admin/openbot-vps/openbot-0.79-overlay
+   docker build --tag openbot:0.79.0-stall-off .
+
+   The build stops if the bundle is not the pinned 0.79.0 file.
+   The build stops if a site does not match one time.
+   The build stops if the archive is already patched.
+
+3. Checks. Do not mount the volume openbot_openbot-data.
+
+   docker run --rm --user root --entrypoint /bin/grep openbot:0.79.0-stall-off -a -o openbot-fork-acp-turn-stall-v2-compaction-v1 /opt/OpenBot/app/resources/app.asar
+
+   The command prints the marker one time.
+
+   docker run --rm --user root --entrypoint /bin/grep openbot:0.79.0-stall-off -a -o OPENBOT_CONTEXT_COMPACTION_THRESHOLD /opt/OpenBot/app/resources/app.asar
+
+   docker image inspect --format '{{.Config.User}} {{json .Config.Entrypoint}}' openbot:0.79.0-stall-off
+
+   The user is openbot. The entrypoint still starts with /usr/bin/tini.
+
+   timeout 50 docker run --rm --name openbot-079-check \
+     -e OPENBOT_ACP_TURN_STALL_MS=0 \
+     -e OPENBOT_CONTEXT_COMPACTION_THRESHOLD=0.9 \
+     --tmpfs /data:uid=1000,gid=1000,mode=0700 \
+     --shm-size 1g \
+     --security-opt seccomp=/home/admin/openbot-vps/seccomp.json \
+     --security-opt no-new-privileges:true \
+     openbot:0.79.0-stall-off
+
+   Use a throwaway store only. Do not use the real data volume.
+   Stop the check container if it is still up.
+
+4. Cut over only when OpenBot is idle. Stop the running container first.
+   The first 0.79 start migrates the database. An older OpenBot cannot open that database.
+   Save the data volume before that start. This is a tar of the volume, not an image archive.
+
+   cd /home/admin/openbot-vps
+   docker compose stop openbot
+   mkdir -p /home/admin/openbot-vps/backups
+   docker run --rm \
+     -v openbot_openbot-data:/data:ro \
+     -v /home/admin/openbot-vps/backups:/backups \
+     openbot:0.68.0-stall-off \
+     tar -C /data -cf /backups/openbot-data-before-0.79.tar .
+
+5. Edit only the image line and the environment in /home/admin/openbot-vps/compose.yaml.
+   Keep every other line. Remove AGENT_STALL_TIMEOUT_MS.
+
+   image: openbot:0.79.0-stall-off
+
+   OPENBOT_ACP_TURN_STALL_MS: "0"
+   OPENBOT_CONTEXT_COMPACTION_THRESHOLD: "0.9"
+
+   docker compose up -d --no-deps --force-recreate openbot
+
+6. Rollback. Restore the volume tar, then put the old image line back.
+   Do not start 0.79 against the restored volume, and do not start 0.68 against the migrated volume.
+
+   docker compose stop openbot
+   docker run --rm \
+     -v openbot_openbot-data:/data \
+     -v /home/admin/openbot-vps/backups:/backups:ro \
+     openbot:0.68.0-stall-off \
+     sh -c 'rm -rf /data/* /data/.[!.]* && tar -C /data -xf /backups/openbot-data-before-0.79.tar'
+
+   image: openbot:0.68.0-stall-off
+
+   Remove OPENBOT_CONTEXT_COMPACTION_THRESHOLD.
+   Keep or remove OPENBOT_ACP_TURN_STALL_MS. The 0.68 image already reads 0 as off.
+
+   docker compose up -d --no-deps --force-recreate openbot

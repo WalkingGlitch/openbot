@@ -1,0 +1,19 @@
+{
+  "author": "TheWalkingGlitch",
+  "version": "0.79.0",
+  "gitRevision": "acb69b845faf9d66c4687da9e74c0f53692995ca",
+  "image": "ghcr.io/nightly-labs/openbot:0.79.0@sha256:136cd40211352af4ec41df4451a920aebc79c5bb3f94cb862f6a3aea4696e915",
+  "appImage": "OpenBot-0.79.0-x86_64.AppImage",
+  "appImageSha256": "0b51ebcfae460f7dc345e463de170560061da87a3a0dcf989522f8c091ea3231",
+  "bundle": "out/main/index.js",
+  "bundleSha256": "95ac587b765dea90a910866915aa3dd66e01398f3f73c5cb55eb857086261646",
+  "bundleBytes": 20341506,
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "marker": "openbot-fork-acp-turn-stall-v2-compaction-v1",
+  "dryRunPatchedBundleSha256": "5117e80aeba75034839464de16077dae0dfd7fea2d85ef98da053a45d8bd5083",
+  "dryRunPatchedBundleBytes": 20343654,
+  "settings": {
+    "OPENBOT_ACP_TURN_STALL_MS": "0 turns the ACP silence watchdog off. A positive whole number is that many milliseconds.",
+    "OPENBOT_CONTEXT_COMPACTION_THRESHOLD": "Absent is 0.9. Allowed range is 0.55 to 0.98."
+  }
+}

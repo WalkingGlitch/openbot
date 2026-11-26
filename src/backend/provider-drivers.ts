@@ -87,8 +87,8 @@ import type { McpOAuthProxySettingsStore } from "./mcp-oauth-proxy";
 import type { McpDropReporter, McpEndpointSource, McpServerSource, McpToolRuntimeSource } from "./mcp-provider-shapes";
 import { MuseAgentClient } from "./muse-client";
 import { openCodeAgentDefaultsEnv } from "./opencode-agent-defaults";
+import { customEndpointStallMs } from "./fork-runtime-limits";
 import {
-  CUSTOM_ENDPOINT_SILENCE_MS,
   type CustomProviderSource,
   clearedInheritedOpenCodeKeyEnv,
   customProvidersOn,
@@ -905,7 +905,7 @@ export const BUILT_IN_PROVIDER_DRIVERS: readonly BuiltInProviderDriver[] = [
             ? {
                 name: endpoint.name,
                 hasCredentials: Boolean(endpoint.apiKey) || endpoint.headers.length > 0,
-                stallMs: CUSTOM_ENDPOINT_SILENCE_MS,
+                stallMs: customEndpointStallMs(),
                 ...(contextWindow === undefined ? {} : { contextWindow }),
               }
             : null;

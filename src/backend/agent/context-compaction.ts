@@ -12,6 +12,7 @@ import type { AgentClient } from "../agent-client";
 import type { AgentStore } from "../agent-store";
 import { causeHelpers } from "../effect-boundary";
 import { decodeRecordResponse, getRecord } from "../protocol";
+import { contextCompactionThreshold, ineffectiveCompactionShare } from "../fork-runtime-limits";
 import { finiteNumberOrNull } from "./account-usage";
 import { CacheExpiryCompaction } from "./cache-expiry-compaction";
 import type { FailureContext } from "./failure-signal";
@@ -34,8 +35,6 @@ interface ThreadContextBudget {
 
 const logger = createOpenBotLogger("context-compaction");
 
-export const CONTEXT_COMPACTION_THRESHOLD = 0.8;
-const INEFFECTIVE_COMPACTION_SHARE = CONTEXT_COMPACTION_THRESHOLD - 0.1;
 const INEFFECTIVE_COMPACTION_LIMIT = 2;
 const FAILED_COMPACTION_LIMIT = 2;
 const REPEATED_COMPACTION_LIMIT = 2;
@@ -350,12 +349,12 @@ export class ContextCompaction {
       this.#checkCompaction(budget, agentId);
     }
 
-    const pressured = usedTokens / contextWindow >= CONTEXT_COMPACTION_THRESHOLD;
+    const pressured = usedTokens / contextWindow >= contextCompactionThreshold();
     if (!pressured) {
       budget.pending = false;
       budget.lastCompactedTokens = null;
       budget.failedCompactions = 0;
-      if (usedTokens / contextWindow < INEFFECTIVE_COMPACTION_SHARE) budget.ineffectiveCompactions = 0;
+      if (usedTokens / contextWindow < ineffectiveCompactionShare()) budget.ineffectiveCompactions = 0;
       return;
     }
     if (budget.phase !== "idle") return;
@@ -396,7 +395,7 @@ export class ContextCompaction {
     )
       return;
     const estimated = budget.usedTokens + Math.ceil(characters / CHARACTERS_PER_TOKEN);
-    if (estimated / budget.contextWindow < CONTEXT_COMPACTION_THRESHOLD) return;
+    if (estimated / budget.contextWindow < contextCompactionThreshold()) return;
     budget.pending = true;
     logger.info("The next input fills the session, so it compacts first.", {
       usedPercent: Math.round((budget.usedTokens / budget.contextWindow) * 100),
@@ -425,7 +424,7 @@ export class ContextCompaction {
 
   #checkCompaction(budget: ThreadContextBudget, agentId: string | undefined): void {
     const share = budget.usedTokens / budget.contextWindow;
-    if (share < INEFFECTIVE_COMPACTION_SHARE) {
+    if (share < ineffectiveCompactionShare()) {
       budget.ineffectiveCompactions = 0;
       return;
     }

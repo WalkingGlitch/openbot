@@ -86,6 +86,7 @@ import {
 import { type AgentCliInfo, cliPathEnvironment, compareReleases, isVersion, olderVersion } from "./cli";
 import { runCauseEffect } from "./effect-boundary";
 import { encodedModelId, providerModelValue } from "./encoded-model-id";
+import { resolveAcpModelSilenceMs } from "./fork-runtime-limits";
 import { IdleThreadPool } from "./idle-thread-pool";
 import { type DynamicToolNamespace, LocalMcpBridge, type LocalMcpSession } from "./local-mcp-bridge";
 import type { McpToolArguments } from "./mcp-probe";
@@ -3939,11 +3940,17 @@ export class AcpAgentClient extends EventEmitter<ClientEvents> {
     thread: AcpThread,
     turn: AcpTurn,
   ) {
+    const openbotSilenceMs = resolveAcpModelSilenceMs(this.options.turnStallMs);
+    // Zero keeps this turn open. Stop still ends it. A background-task agent still uses its own probe.
+    if (openbotSilenceMs === null && !this.#flavor.promptOpenForBackgroundTasks) return;
     const agentLimit = this.options.turnStallMs ?? this.#flavor.turnStallMs ?? ACP_TURN_STALL_MS;
     const grace = this.#flavor.modelRetryUpdate ? ACP_MODEL_RETRY_GRACE : 1;
     let answeredAt = 0;
     while (thread.activeTurn === turn && !turn.completing && !turn.stopped) {
-      const limit = (this.options.customEndpoint?.(thread.currentModelId)?.stallMs ?? agentLimit) * grace;
+      const limit =
+        typeof openbotSilenceMs === "number"
+          ? openbotSilenceMs
+          : (this.options.customEndpoint?.(thread.currentModelId)?.stallMs ?? agentLimit) * grace;
       if (this.#flavor.promptOpenForBackgroundTasks) {
         const silentFor = Date.now() - Math.max(turn.lastActivityAt, answeredAt);
         if (silentFor < limit) {
