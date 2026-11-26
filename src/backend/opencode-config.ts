@@ -4,6 +4,7 @@ import {
   type CustomProviderModel,
   customModelKey,
 } from "@openbot/contracts/ipc";
+import { customEndpointRequestTimeoutMs } from "./fork-runtime-limits";
 
 export interface CustomProviderConfig {
   readonly id: string;
@@ -130,8 +131,8 @@ function providerEntry(provider: CustomProviderConfig): OpenCodeProviderEntry {
     name: provider.name,
     options: {
       baseURL: anthropic ?? provider.baseUrl,
-      headerTimeout: CUSTOM_ENDPOINT_SILENCE_MS,
-      chunkTimeout: CUSTOM_ENDPOINT_SILENCE_MS,
+      headerTimeout: customEndpointRequestTimeoutMs(),
+      chunkTimeout: customEndpointRequestTimeoutMs(),
       ...(provider.apiKey ? { apiKey: provider.apiKey } : {}),
       ...(provider.headers.length > 0
         ? { headers: Object.fromEntries(provider.headers.map((header) => [header.name, header.value])) }
